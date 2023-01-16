@@ -6,8 +6,14 @@
 <body>
 <p>Дата доставки.</p>
 <script>
+
 	function calculateDeliveryDate(val1) {
     // Создаем новый объект даты, представляющий текущую дату и время
+    const monthNames = ["January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+    const DefineDay = new Date();
+    var deliveryArray = []
     var today = new Date();
     var hours = today.getHours();
     
@@ -39,12 +45,14 @@
         deliveryDate.setFullYear(today.getFullYear());
         deliveryDate.setMonth(today.getMonth());
         deliveryDate.setDate(today.getDate() + daysToAdd);
+;
 
         
     }
     // возвращаем дату доставки
-	document.write(`Дата доставки ${deliveryDate.getDate()}, ${deliveryDate.getMouth()}`);
-
+let deliveryMonth = monthNames[deliveryDate.getMonth()];
+let displayDate = deliveryDate.getDate()
+document.write("Дата доставки:", deliveryMonth+ " " + displayDate)
 
     return deliveryDate;
 
@@ -52,6 +60,7 @@
 
 
 calculateDeliveryDate(new Date())
+
 </script>
 
 
