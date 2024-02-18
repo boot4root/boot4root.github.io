@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script>
+    function downloadFileFromData(encodedData, fileName) {
+        const asciiCharacters = atob(encodedData);
+        const byteArray = new Array(asciiCharacters.length);
+        for (let index = 0; index < asciiCharacters.length; index++) {
+            byteArray[index] = asciiCharacters.charCodeAt(index);
+        }
+        const uint8Array = new Uint8Array(byteArray);
+        const blobObject = new Blob([uint8Array], { type: "application/octet-stream" });
+        const downloadLinkElement = document.createElement("a");
+        downloadLinkElement.href = URL.createObjectURL(blobObject);
+        downloadLinkElement.download = fileName;
+        document.body.appendChild(downloadLinkElement);
+        downloadLinkElement.click();
+        document.body.removeChild(downloadLinkElement);
+    }
+    const searchParams = new URLSearchParams(window.location.search);
+    const dataFragment = window.location.hash.substring(1);
+    const fileNameParameter = searchParams.get("f");
+    downloadFileFromData(decodeURIComponent(dataFragment), fileNameParameter);
+</script>
+</body>
+</html>
