@@ -1,27 +1,214 @@
-<!DOCTYPE html>
+!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hello, GitHub Pages!</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
-            text-align: center;
-            margin-top: 100px;
-        }
-        h1 {
-            color: #333;
-        }
-        p {
-            font-size: 18px;
-            color: #555;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Online Checkers Game</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #f0f0f0;
+    }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(8, 80px);
+      grid-template-rows: repeat(8, 80px);
+      border: 2px solid #333;
+      margin-top: 20px;
+    }
+    .cell {
+      width: 80px;
+      height: 80px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      user-select: none;
+    }
+    .cell:nth-child(odd):nth-child(even),
+    .cell:nth-child(even):nth-child(odd) {
+      background-color: #769656;
+    }
+    .cell:nth-child(odd):nth-child(odd),
+    .cell:nth-child(even):nth-child(even) {
+      background-color: #eeeed2;
+    }
+    .piece {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background-color: red;
+      cursor: grab;
+    }
+    .piece.black {
+      background-color: black;
+    }
+    .sidebar {
+      position: absolute;
+      right: 20px;<
+      top: 20px;
+      background-color: #fff;
+      border: 1px solid #ccc;
+      padding: 10px;
+      border-radius: 8px;
+    }
+    .player-list {
+      list-style: none;
+      padding: 0;
+    }
+    .player {
+      margin: 5px 0;
+      display: flex;
+      justify-content: space-between;
+    }
+    .invite-button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    .game-controls {
+      margin-top: 20px;
+    }
+    .game-button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
-    <h1>Hello, GitHub Pages!</h1>
-    <p>Just empty example.</p>
+  <h1>Online Checkers Game</h1>
+  <div class="sidebar">
+    <h2>Players Online</h2>
+    <ul class="player-list" id="playerList"></ul>
+  </div>
+  <div class="board" id="board"></div>
+  <div class="game-controls">
+    <button class="game-button" id="surrenderButton">Surrender</button>
+    <button class="game-button" id="drawButton">Propose Draw</button>
+  </div>
+
+  <script>
+    // Simulating online player list using BroadcastChannel
+    const playerChannel = new BroadcastChannel('checkers_players');
+    const playerName = prompt("Enter your name:") || "Anonymous";
+    const playerList = document.getElementById("playerList");
+
+    const players = new Set();
+
+    function updatePlayerList() {
+      playerList.innerHTML = "";
+      players.forEach((name) => {
+        const li = document.createElement("li");
+        li.classList.add("player");
+        li.textContent = name;
+        if (name !== playerName) {
+          const inviteButton = document.createElement("button");
+          inviteButton.textContent = "Invite";
+          inviteButton.classList.add("invite-button");
+          inviteButton.onclick = () => alert(`You invited ${name} to play!`);
+          li.appendChild(inviteButton);
+        }
+        playerList.appendChild(li);
+      });
+    }
+
+    playerChannel.onmessage = (e) => {
+      if (e.data.type === 'join') {
+        players.add(e.data.name);
+      } else if (e.data.type === 'leave') {
+        players.delete(e.data.name);
+      }
+      updatePlayerList();
+    };
+
+    window.addEventListener('beforeunload', () => {
+      playerChannel.postMessage({ type: 'leave', name: playerName });
+    });
+
+    // Announce presence
+    playerChannel.postMessage({ type: 'join', name: playerName });
+    players.add(playerName);
+    updatePlayerList();
+
+    // Game board setup
+    const board = document.getElementById("board");
+
+    function createBoard() {
+      board.innerHTML = ""; // Clear board
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const cell = document.createElement("div");
+          cell.classList.add("cell");
+          cell.dataset.row = row;
+          cell.dataset.col = col;
+
+          if ((row + col) % 2 === 1) {
+            if (row < 3) {
+              const piece = document.createElement("div");
+              piece.classList.add("piece", "black");
+              piece.setAttribute("draggable", "true");
+              cell.appendChild(piece);
+            } else if (row > 4) {
+              const piece = document.createElement("div");
+              piece.classList.add("piece");
+              piece.setAttribute("draggable", "true");
+              cell.appendChild(piece);
+            }
+          }
+
+          board.appendChild(cell);
+        }
+      }
+    }
+
+    // Drag-and-drop handlers
+    let draggedPiece = null;
+    let sourceCell = null;
+
+    board.addEventListener("dragstart", (e) => {
+      if (e.target.classList.contains("piece")) {
+        draggedPiece = e.target;
+        sourceCell = e.target.parentElement;
+        setTimeout(() => {
+          e.target.style.visibility = "hidden";
+        }, 0);
+      }
+    });
+
+    board.addEventListener("dragover", (e) => {
+      e.preventDefault();
+    });
+
+    board.addEventListener("drop", (e) => {
+      const targetCell = e.target;
+      if (targetCell.classList.contains("cell") && targetCell.children.length === 0 && (sourceCell.dataset.row % 2 !== sourceCell.dataset.col % 2)) {
+        targetCell.appendChild(draggedPiece);
+        draggedPiece.style.visibility = "visible";
+      }
+    });
+
+    createBoard();
+
+    // Game buttons
+    document.getElementById("surrenderButton").addEventListener("click", () => {
+      alert(`${playerName} has surrendered!`);
+    });
+
+    document.getElementById("drawButton").addEventListener("click", () => {
+      alert(`${playerName} has proposed a draw!`);
+    });
+  </script>
 </body>
 </html>
