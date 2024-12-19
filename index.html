@@ -73,19 +73,9 @@
       padding: 5px 10px;
       cursor: pointer;
     }
-    .game-controls {
-      margin-top: 20px;
-    }
-    .game-button {
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 10px 20px;
-      margin: 5px;
-      cursor: pointer;
-    }
   </style>
+  <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database.js"></script>
 </head>
 <body>
   <h1>Online Checkers Game</h1>
@@ -94,177 +84,55 @@
     <ul class="player-list" id="playerList"></ul>
   </div>
   <div class="board" id="board"></div>
-  <div class="game-controls">
-    <button class="game-button" id="surrenderButton">Surrender</button>
-    <button class="game-button" id="drawButton">Propose Draw</button>
-  </div>
 
   <script>
-    const playerName = prompt("Enter your name:") || "Anonymous";
+    // Firebase configuration
+    const firebaseConfig = {
+    apiKey: "AIzaSyDewD25IfKc5HYzrphrebLQNwk_fx8o12o",
+    authDomain: "checkers-50b1a.firebaseapp.com",
+    projectId: "checkers-50b1a",
+    storageBucket: "checkers-50b1a.firebasestorage.app",
+    messagingSenderId: "229536907224",
+    appId: "1:229536907224:web:eb1c7a3c7a5473ce7cfcad",
+    measurementId: "G-VWK11L9DSS"
+    };
+
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    const playerName = prompt("Enter your name:");
+    const playerRef = database.ref("players/").push();
+
+    // Add player to database
+    playerRef.set({ name: playerName });
+
+    // Remove player from database on disconnect
+    playerRef.onDisconnect().remove();
+
     const playerList = document.getElementById("playerList");
 
-    // WebRTC setup
-    const configuration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
-    const peerConnections = {};
-    const dataChannels = {};
-    const players = new Map();
-
-    const localConnection = new RTCPeerConnection(configuration);
-
-    // Display current players
-    function updatePlayerList() {
-      playerList.innerHTML = "";
-      players.forEach((_, name) => {
+    // Listen for players
+    database.ref("players/").on("value", (snapshot) => {
+      playerList.innerHTML = ""; // Clear list
+      snapshot.forEach((childSnapshot) => {
+        const player = childSnapshot.val();
         const li = document.createElement("li");
         li.classList.add("player");
-        li.textContent = name;
-        if (name !== playerName) {
+        li.textContent = player.name;
+
+        if (player.name !== playerName) {
           const inviteButton = document.createElement("button");
           inviteButton.textContent = "Invite";
           inviteButton.classList.add("invite-button");
-          inviteButton.onclick = () => invitePlayer(name);
+          inviteButton.onclick = () => alert(`You invited ${player.name} to play!`);
           li.appendChild(inviteButton);
         }
+
         playerList.appendChild(li);
       });
-    }
+    });
 
-    // Send an invitation
-    function invitePlayer(name) {
-      if (dataChannels[name]) {
-        dataChannels[name].send(JSON.stringify({ type: "invite", from: playerName }));
-        alert(`Invitation sent to ${name}`);
-      }
-    }
-
-    // Handle incoming data messages
-    function handleDataMessage(event, name) {
-      const message = JSON.parse(event.data);
-      if (message.type === "invite") {
-        alert(`${message.from} has invited you to play!`);
-      }
-    }
-
-    // Listen for new ICE candidates
-    localConnection.onicecandidate = (event) => {
-      if (event.candidate) {
-        broadcastMessage({ type: "ice-candidate", candidate: event.candidate, from: playerName });
-      }
-    };
-
-    // Handle connection state changes
-    localConnection.onconnectionstatechange = () => {
-      if (localConnection.connectionState === "disconnected") {
-        console.log("Disconnected");
-      }
-    };
-
-    // Broadcast a message to all peers
-    function broadcastMessage(message) {
-      players.forEach((_, name) => {
-        if (dataChannels[name]) {
-          dataChannels[name].send(JSON.stringify(message));
-        }
-      });
-    }
-
-    // Simulate joining the network
-    players.set(playerName, localConnection);
-    updatePlayerList();
-
-    // Add new connections
-    function connectToNewPlayer(name) {
-      const peerConnection = new RTCPeerConnection(configuration);
-      peerConnections[name] = peerConnection;
-
-      const dataChannel = peerConnection.createDataChannel("checkers");
-      dataChannels[name] = dataChannel;
-
-      dataChannel.onmessage = (event) => handleDataMessage(event, name);
-
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          broadcastMessage({ type: "ice-candidate", candidate: event.candidate, from: playerName });
-        }
-      };
-
-      peerConnection.onconnectionstatechange = () => {
-        if (peerConnection.connectionState === "connected") {
-          console.log(`${name} is connected`);
-        }
-      };
-
-      peerConnection.createOffer().then((offer) => {
-        return peerConnection.setLocalDescription(offer);
-      }).then(() => {
-        broadcastMessage({ type: "offer", offer: peerConnection.localDescription, from: playerName, to: name });
-      });
-    }
-
-    // Handle incoming offers
-    function handleOffer(offer, from) {
-      const peerConnection = new RTCPeerConnection(configuration);
-      peerConnections[from] = peerConnection;
-
-      peerConnection.ondatachannel = (event) => {
-        const dataChannel = event.channel;
-        dataChannels[from] = dataChannel;
-        dataChannel.onmessage = (event) => handleDataMessage(event, from);
-      };
-
-      peerConnection.setRemoteDescription(new RTCSessionDescription(offer)).then(() => {
-        return peerConnection.createAnswer();
-      }).then((answer) => {
-        return peerConnection.setLocalDescription(answer);
-      }).then(() => {
-        broadcastMessage({ type: "answer", answer: peerConnection.localDescription, from: playerName, to: from });
-      });
-    }
-
-    // Handle incoming answers
-    function handleAnswer(answer, from) {
-      const peerConnection = peerConnections[from];
-      peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-    }
-
-    // Handle incoming ICE candidates
-    function handleIceCandidate(candidate, from) {
-      const peerConnection = peerConnections[from];
-      if (peerConnection) {
-        peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-      }
-    }
-
-    // Listen for messages
-    const messageChannel = new BroadcastChannel("checkers_channel");
-    messageChannel.onmessage = (event) => {
-      const { type, from, to, ...data } = event.data;
-      if (from === playerName) return;
-
-      switch (type) {
-        case "join":
-          players.set(from, null);
-          updatePlayerList();
-          if (from !== playerName) {
-            connectToNewPlayer(from);
-          }
-          break;
-        case "offer":
-          if (to === playerName) handleOffer(data.offer, from);
-          break;
-        case "answer":
-          if (to === playerName) handleAnswer(data.answer, from);
-          break;
-        case "ice-candidate":
-          if (to === playerName) handleIceCandidate(data.candidate, from);
-          break;
-      }
-    };
-
-    // Announce presence
-    messageChannel.postMessage({ type: "join", from: playerName });
-
-    // Game board setup
     const board = document.getElementById("board");
 
     function createBoard() {
@@ -322,15 +190,6 @@
     });
 
     createBoard();
-
-    // Game buttons
-    document.getElementById("surrenderButton").addEventListener("click", () => {
-      alert(`${playerName} has surrendered!`);
-    });
-
-    document.getElementById("drawButton").addEventListener("click", () => {
-      alert(`${playerName} has proposed a draw!`);
-    });
   </script>
 </body>
 </html>
