@@ -1,4 +1,4 @@
-!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -49,7 +49,7 @@
     }
     .sidebar {
       position: absolute;
-      right: 20px;<
+      right: 20px;
       top: 20px;
       background-color: #fff;
       border: 1px solid #ccc;
@@ -100,16 +100,21 @@
   </div>
 
   <script>
-    // Simulating online player list using BroadcastChannel
-    const playerChannel = new BroadcastChannel('checkers_players');
     const playerName = prompt("Enter your name:") || "Anonymous";
     const playerList = document.getElementById("playerList");
 
-    const players = new Set();
+    // WebRTC setup
+    const configuration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+    const peerConnections = {};
+    const dataChannels = {};
+    const players = new Map();
 
+    const localConnection = new RTCPeerConnection(configuration);
+
+    // Display current players
     function updatePlayerList() {
       playerList.innerHTML = "";
-      players.forEach((name) => {
+      players.forEach((_, name) => {
         const li = document.createElement("li");
         li.classList.add("player");
         li.textContent = name;
@@ -117,30 +122,147 @@
           const inviteButton = document.createElement("button");
           inviteButton.textContent = "Invite";
           inviteButton.classList.add("invite-button");
-          inviteButton.onclick = () => alert(`You invited ${name} to play!`);
+          inviteButton.onclick = () => invitePlayer(name);
           li.appendChild(inviteButton);
         }
         playerList.appendChild(li);
       });
     }
 
-    playerChannel.onmessage = (e) => {
-      if (e.data.type === 'join') {
-        players.add(e.data.name);
-      } else if (e.data.type === 'leave') {
-        players.delete(e.data.name);
+    // Send an invitation
+    function invitePlayer(name) {
+      if (dataChannels[name]) {
+        dataChannels[name].send(JSON.stringify({ type: "invite", from: playerName }));
+        alert(`Invitation sent to ${name}`);
       }
-      updatePlayerList();
+    }
+
+    // Handle incoming data messages
+    function handleDataMessage(event, name) {
+      const message = JSON.parse(event.data);
+      if (message.type === "invite") {
+        alert(`${message.from} has invited you to play!`);
+      }
+    }
+
+    // Listen for new ICE candidates
+    localConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        broadcastMessage({ type: "ice-candidate", candidate: event.candidate, from: playerName });
+      }
     };
 
-    window.addEventListener('beforeunload', () => {
-      playerChannel.postMessage({ type: 'leave', name: playerName });
-    });
+    // Handle connection state changes
+    localConnection.onconnectionstatechange = () => {
+      if (localConnection.connectionState === "disconnected") {
+        console.log("Disconnected");
+      }
+    };
+
+    // Broadcast a message to all peers
+    function broadcastMessage(message) {
+      players.forEach((_, name) => {
+        if (dataChannels[name]) {
+          dataChannels[name].send(JSON.stringify(message));
+        }
+      });
+    }
+
+    // Simulate joining the network
+    players.set(playerName, localConnection);
+    updatePlayerList();
+
+    // Add new connections
+    function connectToNewPlayer(name) {
+      const peerConnection = new RTCPeerConnection(configuration);
+      peerConnections[name] = peerConnection;
+
+      const dataChannel = peerConnection.createDataChannel("checkers");
+      dataChannels[name] = dataChannel;
+
+      dataChannel.onmessage = (event) => handleDataMessage(event, name);
+
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          broadcastMessage({ type: "ice-candidate", candidate: event.candidate, from: playerName });
+        }
+      };
+
+      peerConnection.onconnectionstatechange = () => {
+        if (peerConnection.connectionState === "connected") {
+          console.log(`${name} is connected`);
+        }
+      };
+
+      peerConnection.createOffer().then((offer) => {
+        return peerConnection.setLocalDescription(offer);
+      }).then(() => {
+        broadcastMessage({ type: "offer", offer: peerConnection.localDescription, from: playerName, to: name });
+      });
+    }
+
+    // Handle incoming offers
+    function handleOffer(offer, from) {
+      const peerConnection = new RTCPeerConnection(configuration);
+      peerConnections[from] = peerConnection;
+
+      peerConnection.ondatachannel = (event) => {
+        const dataChannel = event.channel;
+        dataChannels[from] = dataChannel;
+        dataChannel.onmessage = (event) => handleDataMessage(event, from);
+      };
+
+      peerConnection.setRemoteDescription(new RTCSessionDescription(offer)).then(() => {
+        return peerConnection.createAnswer();
+      }).then((answer) => {
+        return peerConnection.setLocalDescription(answer);
+      }).then(() => {
+        broadcastMessage({ type: "answer", answer: peerConnection.localDescription, from: playerName, to: from });
+      });
+    }
+
+    // Handle incoming answers
+    function handleAnswer(answer, from) {
+      const peerConnection = peerConnections[from];
+      peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+    }
+
+    // Handle incoming ICE candidates
+    function handleIceCandidate(candidate, from) {
+      const peerConnection = peerConnections[from];
+      if (peerConnection) {
+        peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+    }
+
+    // Listen for messages
+    const messageChannel = new BroadcastChannel("checkers_channel");
+    messageChannel.onmessage = (event) => {
+      const { type, from, to, ...data } = event.data;
+      if (from === playerName) return;
+
+      switch (type) {
+        case "join":
+          players.set(from, null);
+          updatePlayerList();
+          if (from !== playerName) {
+            connectToNewPlayer(from);
+          }
+          break;
+        case "offer":
+          if (to === playerName) handleOffer(data.offer, from);
+          break;
+        case "answer":
+          if (to === playerName) handleAnswer(data.answer, from);
+          break;
+        case "ice-candidate":
+          if (to === playerName) handleIceCandidate(data.candidate, from);
+          break;
+      }
+    };
 
     // Announce presence
-    playerChannel.postMessage({ type: 'join', name: playerName });
-    players.add(playerName);
-    updatePlayerList();
+    messageChannel.postMessage({ type: "join", from: playerName });
 
     // Game board setup
     const board = document.getElementById("board");
