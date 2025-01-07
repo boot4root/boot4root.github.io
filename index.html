@@ -59,6 +59,9 @@
       margin-top: 10px;
       display: none;
     }
+    #joinPrompt {
+      display: none;
+    }
     textarea {
       width: 300px;
       height: 100px;
@@ -75,6 +78,11 @@
     <textarea id="signalData" placeholder="Скопируйте или вставьте данные для подключения"></textarea>
     <button id="sendSignal">Отправить</button>
   </div>
+  <div id="joinPrompt">
+    <p>Кто-то приглашает вас присоединиться к игре. Вы хотите присоединиться?</p>
+    <button id="acceptInvite">Принять</button>
+    <button id="declineInvite">Отклонить</button>
+  </div>
   <div class="game-container" id="board"></div>
 
   <script>
@@ -84,6 +92,9 @@
     const signalArea = document.getElementById("signalArea");
     const signalData = document.getElementById("signalData");
     const sendSignalButton = document.getElementById("sendSignal");
+    const joinPrompt = document.getElementById("joinPrompt");
+    const acceptInviteButton = document.getElementById("acceptInvite");
+    const declineInviteButton = document.getElementById("declineInvite");
 
     let peerConnection;
     let dataChannel;
@@ -218,6 +229,16 @@
       }
     });
 
+    acceptInviteButton.addEventListener("click", () => {
+      joinPrompt.style.display = "none";
+      signalArea.style.display = "block";
+    });
+
+    declineInviteButton.addEventListener("click", () => {
+      joinPrompt.style.display = "none";
+      console.log("Приглашение отклонено");
+    });
+
     let selectedCell = null;
 
     board.addEventListener("click", event => {
@@ -259,10 +280,21 @@
     }
 
     function sendMove(fromCell, toCell) {
+      const fromRow = parseInt(fromCell.dataset.row);
+      const fromCol = parseInt(fromCell.dataset.col);
+      const toRow = parseInt(toCell.dataset.row);
+      const toCol = parseInt(toCell.dataset.col);
+
+      const message = {
+        type: "move",
+        payload: {
+          from: { row: fromRow, col: fromCol },
+          to: { row: toRow, col: toCol }
+        }
+      };
+
       if (dataChannel && dataChannel.readyState === "open") {
-        const from = { row: parseInt(fromCell.dataset.row), col: parseInt(fromCell.dataset.col) };
-        const to = { row: parseInt(toCell.dataset.row), col: parseInt(toCell.dataset.col) };
-        dataChannel.send(JSON.stringify({ type: "move", payload: { from, to } }));
+        dataChannel.send(JSON.stringify(message));
       }
     }
 
