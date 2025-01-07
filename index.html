@@ -146,27 +146,28 @@
   </div>
 
   <script>
-    // Global variables
     const roomList = document.getElementById("roomList");
     const board = document.getElementById("board");
     const chatMessages = document.getElementById("chatMessages");
     const chatInput = document.getElementById("chatInput");
     const chatSend = document.getElementById("chatSend");
 
+    const channel = new BroadcastChannel("checkers_game");
+    const rooms = Array.from({ length: 10 }, (_, i) => ({ id: i, players: [], boardState: null, chat: [] }));
     let currentRoom = null;
     let playerColor = null;
     let boardState = Array(8).fill(null).map(() => Array(8).fill(null));
-    let turn = "white"; // Keep track of whose turn it is
+    let turn = "white";
 
-    // Initialize rooms
-    const rooms = Array.from({ length: 10 }, (_, i) => ({ players: [], id: i }));
-    rooms.forEach(room => {
-      const roomDiv = document.createElement("div");
-      roomDiv.classList.add("room");
-      roomDiv.textContent = `Комната ${room.id + 1}`;
-      roomDiv.onclick = () => joinRoom(room.id);
-      roomList.appendChild(roomDiv);
-    });
+    function initializeRooms() {
+      rooms.forEach(room => {
+        const roomDiv = document.createElement("div");
+        roomDiv.classList.add("room");
+        roomDiv.textContent = `Комната ${room.id + 1}`;
+        roomDiv.onclick = () => joinRoom(room.id);
+        roomList.appendChild(roomDiv);
+      });
+    }
 
     function joinRoom(roomId) {
       const room = rooms[roomId];
@@ -176,20 +177,33 @@
       }
 
       currentRoom = room;
-      room.players.push(prompt("Введите свое имя:"));
+      const playerName = prompt("Введите свое имя:");
+      room.players.push(playerName);
       playerColor = room.players.length === 1 ? "white" : "black";
       updateRooms();
       if (room.players.length === 2) startGame();
+
+      channel.postMessage({ type: "room_update", room });
     }
 
     function updateRooms() {
       document.querySelectorAll(".room").forEach((roomDiv, index) => {
         const room = rooms[index];
         roomDiv.textContent = `Комната ${room.id + 1} (${room.players.length}/2)`;
+        if (room.players.length === 2) {
+          roomDiv.classList.add("full");
+        } else {
+          roomDiv.classList.remove("full");
+        }
       });
     }
 
-    // Initialize board
+    function startGame() {
+      initializeBoard();
+      turn = "white";
+      channel.postMessage({ type: "game_start", room: currentRoom });
+    }
+
     function initializeBoard() {
       board.innerHTML = "";
       for (let row = 0; row < 8; row++) {
@@ -224,11 +238,11 @@
       return piece;
     }
 
-    // Drag and Drop
     let draggedPiece = null;
     let sourceCell = null;
 
     function dragStart(e) {
+      if (turn !== playerColor) return;
       draggedPiece = e.target;
       sourceCell = draggedPiece.parentElement;
       setTimeout(() => (draggedPiece.style.visibility = "hidden"), 0);
@@ -242,38 +256,78 @@
         targetCell.appendChild(draggedPiece);
         draggedPiece.style.visibility = "visible";
         updateTurn();
+
+        const newBoardState = Array.from(board.children).map(cell => {
+          return cell.children.length ? cell.children[0].className : null;
+        });
+
+        currentRoom.boardState = newBoardState;
+        channel.postMessage({ type: "board_update", boardState: newBoardState });
       }
     });
 
     function isValidMove(source, target) {
-      // Implement logic for valid moves
-      return true; // Placeholder
+      const sourceRow = parseInt(source.dataset.row);
+      const sourceCol = parseInt(source.dataset.col);
+      const targetRow = parseInt(target.dataset.row);
+      const targetCol = parseInt(target.dataset.col);
+      const direction = playerColor === "white" ? -1 : 1
+      const validMove = (targetRow - sourceRow === direction) &&
+                        (Math.abs(targetCol - sourceCol) === 1) &&
+                        !target.children.length;
+
+      return validMove;
     }
 
     function updateTurn() {
       turn = turn === "white" ? "black" : "white";
     }
 
-    // Chat
     chatSend.addEventListener("click", () => {
-      const message = chatInput.value;
-      if (message.trim()) {
-        addMessage(`Вы: ${message}`);
+      const message = chatInput.value.trim();
+      if (message) {
+        currentRoom.chat.push({ player: playerColor, message });
+        chatMessages.innerHTML += `<div>${playerColor}: ${message}</div>`;
         chatInput.value = "";
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        channel.postMessage({ type: "chat_message", chat: currentRoom.chat });
       }
     });
 
-    function addMessage(message) {
-      const msgDiv = document.createElement("div");
-      msgDiv.textContent = message;
-      chatMessages.appendChild(msgDiv);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
+    channel.onmessage = (e) => {
+      const { type, room, boardState: newBoardState, chat } = e.data;
+
+      if (type === "room_update") {
+        rooms[room.id] = room;
+        updateRooms();
+      } else if (type === "game_start") {
+        initializeBoard();
+      } else if (type === "board_update") {
+        boardState = newBoardState;
+        updateBoard();
+      } else if (type === "chat_message") {
+        chatMessages.innerHTML = chat.map(c => `<div>${c.player}: ${c.message}</div>`).join("");
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+    };
+
+    function updateBoard() {
+      Array.from(board.children).forEach((cell, index) => {
+        cell.innerHTML = "";
+        const pieceClass = boardState.flat()[index];
+        if (pieceClass) {
+          const piece = document.createElement("div");
+          piece.className = pieceClass;
+          piece.draggable = true;
+          piece.addEventListener("dragstart", dragStart);
+          cell.appendChild(piece);
+        }
+      });
     }
 
-    function startGame() {
-      alert("Игра началась!");
-      initializeBoard();
-    }
+    initializeRooms();
   </script>
 </body>
 </html>
+
