@@ -3,55 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Шашки</title>
+  <title>Шашки для двух игроков</title>
   <style>
     body {
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: flex-start;
-      margin: 0;
-      padding: 0;
       background-color: #f0f0f0;
       font-family: Arial, sans-serif;
-    }
-    .header {
-      width: 100%;
-      padding: 10px;
-      background-color: #333;
-      color: white;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .room-list {
-      display: flex;
-      gap: 10px;
-      overflow-x: auto;
-      padding: 10px;
-    }
-    .room {
-      padding: 10px;
-      background-color: #007bff;
-      color: white;
-      border-radius: 8px;
-      text-align: center;
-      cursor: pointer;
-      min-width: 80px;
-    }
-    .room.full {
-      background-color: #dc3545;
-      cursor: not-allowed;
-    }
-    .game-container {
-      display: flex;
-      margin-top: 20px;
-      gap: 20px;
     }
     .board {
       display: grid;
       grid-template-columns: repeat(8, 80px);
       grid-template-rows: repeat(8, 80px);
+      margin-top: 20px;
       border: 2px solid #333;
     }
     .cell {
@@ -73,136 +38,30 @@
       width: 60px;
       height: 60px;
       border-radius: 50%;
-      cursor: grab;
       display: flex;
       justify-content: center;
       align-items: center;
-      color: white;
-      font-weight: bold;
-    }
-    .piece.black {
-      background-color: black;
     }
     .piece.white {
       background-color: white;
     }
-    .piece.king::after {
-      content: "♛";
-      font-size: 36px;
-    }
-    .chat {
-      width: 300px;
-      display: flex;
-      flex-direction: column;
-      border: 2px solid #333;
-      border-radius: 8px;
-      background-color: white;
-      overflow: hidden;
-    }
-    .chat-messages {
-      flex: 1;
-      padding: 10px;
-      overflow-y: auto;
-      background-color: #f9f9f9;
-      max-height: 500px;
-    }
-    .chat-input {
-      display: flex;
-      padding: 10px;
-      border-top: 1px solid #ccc;
-      background-color: #fff;
-    }
-    .chat-input input {
-      flex: 1;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    .chat-input button {
-      margin-left: 10px;
-      padding: 10px;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
+    .piece.black {
+      background-color: black;
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>Шашки</h1>
-    <div class="room-list" id="roomList"></div>
-  </div>
-  <div class="game-container">
-    <div class="board" id="board"></div>
-    <div class="chat">
-      <div class="chat-messages" id="chatMessages"></div>
-      <div class="chat-input">
-        <input type="text" id="chatInput" placeholder="Введите сообщение">
-        <button id="chatSend">Отправить</button>
-      </div>
-    </div>
-  </div>
+  <h1>Шашки для двух игроков</h1>
+  <div class="board" id="board"></div>
 
   <script>
-    const roomList = document.getElementById("roomList");
     const board = document.getElementById("board");
-    const chatMessages = document.getElementById("chatMessages");
-    const chatInput = document.getElementById("chatInput");
-    const chatSend = document.getElementById("chatSend");
-
     const channel = new BroadcastChannel("checkers_game");
-    const rooms = Array.from({ length: 10 }, (_, i) => ({ id: i, players: [], boardState: null, chat: [] }));
-    let currentRoom = null;
     let playerColor = null;
-    let boardState = Array(8).fill(null).map(() => Array(8).fill(null));
-    let turn = "white";
+    let turn = "white"; // Начало игры всегда с белого
 
-    function initializeRooms() {
-      rooms.forEach(room => {
-        const roomDiv = document.createElement("div");
-        roomDiv.classList.add("room");
-        roomDiv.textContent = `Комната ${room.id + 1}`;
-        roomDiv.onclick = () => joinRoom(room.id);
-        roomList.appendChild(roomDiv);
-      });
-    }
-
-    function joinRoom(roomId) {
-      const room = rooms[roomId];
-      if (room.players.length >= 2) {
-        alert("Комната заполнена!");
-        return;
-      }
-
-      currentRoom = room;
-      const playerName = prompt("Введите свое имя:");
-      room.players.push(playerName);
-      playerColor = room.players.length === 1 ? "white" : "black";
-      updateRooms();
-      if (room.players.length === 2) startGame();
-
-      channel.postMessage({ type: "room_update", room });
-    }
-
-    function updateRooms() {
-      document.querySelectorAll(".room").forEach((roomDiv, index) => {
-        const room = rooms[index];
-        roomDiv.textContent = `Комната ${room.id + 1} (${room.players.length}/2)`;
-        if (room.players.length === 2) {
-          roomDiv.classList.add("full");
-        } else {
-          roomDiv.classList.remove("full");
-        }
-      });
-    }
-
-    function startGame() {
-      initializeBoard();
-      turn = "white";
-      channel.postMessage({ type: "game_start", room: currentRoom });
-    }
+    // Создание доски
+    const boardState = Array(8).fill(null).map(() => Array(8).fill(null));
 
     function initializeBoard() {
       board.innerHTML = "";
@@ -213,18 +72,18 @@
           cell.dataset.row = row;
           cell.dataset.col = col;
 
+          // Расставляем шашки
           if ((row + col) % 2 === 1) {
             if (row < 3) {
               const piece = createPiece("black");
-              boardState[row][col] = piece;
+              boardState[row][col] = "black";
               cell.appendChild(piece);
             } else if (row > 4) {
               const piece = createPiece("white");
-              boardState[row][col] = piece;
+              boardState[row][col] = "white";
               cell.appendChild(piece);
             }
           }
-
           board.appendChild(cell);
         }
       }
@@ -233,101 +92,100 @@
     function createPiece(color) {
       const piece = document.createElement("div");
       piece.classList.add("piece", color);
-      piece.draggable = true;
-      piece.addEventListener("dragstart", dragStart);
       return piece;
     }
 
-    let draggedPiece = null;
-    let sourceCell = null;
-
-    function dragStart(e) {
-      if (turn !== playerColor) return;
-      draggedPiece = e.target;
-      sourceCell = draggedPiece.parentElement;
-      setTimeout(() => (draggedPiece.style.visibility = "hidden"), 0);
+    // Выбор игрока
+    function chooseColor() {
+      if (!playerColor) {
+        playerColor = confirm("Вы играете за белых? Нажмите 'Отмена' для чёрных.") ? "white" : "black";
+        alert(`Вы играете за ${playerColor === "white" ? "белых" : "чёрных"}!`);
+      }
     }
 
-    board.addEventListener("dragover", e => e.preventDefault());
+    // Логика хода
+    board.addEventListener("click", (e) => {
+      const cell = e.target.closest(".cell");
+      if (!cell || !playerColor) return;
 
-    board.addEventListener("drop", e => {
-      const targetCell = e.target;
-      if (targetCell.classList.contains("cell") && isValidMove(sourceCell, targetCell)) {
-        targetCell.appendChild(draggedPiece);
-        draggedPiece.style.visibility = "visible";
-        updateTurn();
+      const row = parseInt(cell.dataset.row);
+      const col = parseInt(cell.dataset.col);
 
-        const newBoardState = Array.from(board.children).map(cell => {
-          return cell.children.length ? cell.children[0].className : null;
-        });
+      // Проверяем очередность
+      if (turn !== playerColor) {
+        alert("Сейчас ход другого игрока!");
+        return;
+      }
 
-        currentRoom.boardState = newBoardState;
-        channel.postMessage({ type: "board_update", boardState: newBoardState });
+      // Проверяем клетку
+      const piece = cell.querySelector(".piece");
+      if (piece && piece.classList.contains(playerColor)) {
+        const target = prompt("Введите клетку для перемещения (например, 4,5):");
+        if (!target) return;
+
+        const [targetRow, targetCol] = target.split(",").map(Number);
+        const targetCell = document.querySelector(`.cell[data-row="${targetRow}"][data-col="${targetCol}"]`);
+
+        if (isValidMove(row, col, targetRow, targetCol)) {
+          movePiece(cell, targetCell);
+        } else {
+          alert("Неверный ход!");
+        }
       }
     });
 
-    function isValidMove(source, target) {
-      const sourceRow = parseInt(source.dataset.row);
-      const sourceCol = parseInt(source.dataset.col);
-      const targetRow = parseInt(target.dataset.row);
-      const targetCol = parseInt(target.dataset.col);
-      const direction = playerColor === "white" ? -1 : 1
-      const validMove = (targetRow - sourceRow === direction) &&
-                        (Math.abs(targetCol - sourceCol) === 1) &&
-                        !target.children.length;
-
-      return validMove;
+    function isValidMove(fromRow, fromCol, toRow, toCol) {
+      // Простая проверка: движение на одну клетку
+      const direction = playerColor === "white" ? -1 : 1;
+      return Math.abs(fromCol - toCol) === 1 && toRow - fromRow === direction;
     }
 
-    function updateTurn() {
+    function movePiece(fromCell, toCell) {
+      const piece = fromCell.querySelector(".piece");
+      toCell.appendChild(piece);
+
+      const fromRow = parseInt(fromCell.dataset.row);
+      const fromCol = parseInt(fromCell.dataset.col);
+      const toRow = parseInt(toCell.dataset.row);
+      const toCol = parseInt(toCell.dataset.col);
+
+      // Обновляем состояние доски
+      boardState[toRow][toCol] = boardState[fromRow][fromCol];
+      boardState[fromRow][fromCol] = null;
+
+      // Передаём ход
       turn = turn === "white" ? "black" : "white";
+
+      // Синхронизация через канал
+      channel.postMessage({ type: "move", boardState, turn });
     }
 
-    chatSend.addEventListener("click", () => {
-      const message = chatInput.value.trim();
-      if (message) {
-        currentRoom.chat.push({ player: playerColor, message });
-        chatMessages.innerHTML += `<div>${playerColor}: ${message}</div>`;
-        chatInput.value = "";
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-
-        channel.postMessage({ type: "chat_message", chat: currentRoom.chat });
-      }
-    });
-
-    channel.onmessage = (e) => {
-      const { type, room, boardState: newBoardState, chat } = e.data;
-
-      if (type === "room_update") {
-        rooms[room.id] = room;
-        updateRooms();
-      } else if (type === "game_start") {
-        initializeBoard();
-      } else if (type === "board_update") {
-        boardState = newBoardState;
-        updateBoard();
-      } else if (type === "chat_message") {
-        chatMessages.innerHTML = chat.map(c => `<div>${c.player}: ${c.message}</div>`).join("");
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+    // Обработка сообщений из канала
+    channel.onmessage = (event) => {
+      const { type, boardState: newState, turn: newTurn } = event.data;
+      if (type === "move") {
+        updateBoard(newState);
+        turn = newTurn;
       }
     };
 
-    function updateBoard() {
-      Array.from(board.children).forEach((cell, index) => {
-        cell.innerHTML = "";
-        const pieceClass = boardState.flat()[index];
-        if (pieceClass) {
-          const piece = document.createElement("div");
-          piece.className = pieceClass;
-          piece.draggable = true;
-          piece.addEventListener("dragstart", dragStart);
-          cell.appendChild(piece);
-        }
+    function updateBoard(newState) {
+      boardState.forEach((row, i) => {
+        row.forEach((cell, j) => {
+          const domCell = document.querySelector(`.cell[data-row="${i}"][data-col="${j}"]`);
+          domCell.innerHTML = ""; // Очищаем
+
+          if (newState[i][j]) {
+            const piece = createPiece(newState[i][j]);
+            domCell.appendChild(piece);
+          }
+        });
       });
     }
 
-    initializeRooms();
+    // Инициализация
+    initializeBoard();
+    chooseColor();
   </script>
 </body>
 </html>
-
