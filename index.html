@@ -3,23 +3,59 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Local Chess Game</title>
+  <title>Шашки</title>
   <style>
     body {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100vh;
       margin: 0;
+      padding: 0;
       background-color: #f0f0f0;
+      font-family: Arial, sans-serif;
+    }
+    .header {
+      width: 100%;
+      padding: 10px;
+      background-color: #333;
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .room-list {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding: 10px;
+    }
+    .room {
+      padding: 10px;
+      background-color: #007bff;
+      color: white;
+      border-radius: 8px;
+      text-align: center;
+      cursor: pointer;
+      min-width: 80px;
+    }
+    .room.active {
+      background-color: #28a745;
+    }
+    .room.full {
+      background-color: #dc3545;
+      cursor: not-allowed;
+    }
+    .game-container {
+      display: flex;
+      margin-top: 20px;
+      gap: 20px;
     }
     .board {
       display: grid;
       grid-template-columns: repeat(8, 80px);
       grid-template-rows: repeat(8, 80px);
       border: 2px solid #333;
-      margin-top: 20px;
     }
     .cell {
       width: 80px;
@@ -27,7 +63,7 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      user-select: none;
+      font-size: 24px;
     }
     .cell:nth-child(odd):nth-child(even),
     .cell:nth-child(even):nth-child(odd) {
@@ -42,6 +78,11 @@
       height: 60px;
       border-radius: 50%;
       cursor: grab;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-weight: bold;
     }
     .piece.black {
       background-color: black;
@@ -49,157 +90,144 @@
     .piece.white {
       background-color: white;
     }
-    .sidebar {
-      position: absolute;
-      right: 20px;
-      top: 20px;
-      background-color: #fff;
-      border: 1px solid #ccc;
-      padding: 10px;
-      border-radius: 8px;
+    .piece.king::after {
+      content: "♛";
+      font-size: 36px;
     }
-    .player-list {
-      list-style: none;
-      padding: 0;
-    }
-    .player {
-      margin: 5px 0;
+    .chat {
+      width: 300px;
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
+      border: 2px solid #333;
+      border-radius: 8px;
+      background-color: white;
+      overflow: hidden;
+    }
+    .chat-messages {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      background-color: #f9f9f9;
+      max-height: 500px;
+    }
+    .chat-input {
+      display: flex;
+      padding: 10px;
+      border-top: 1px solid #ccc;
+      background-color: #fff;
+    }
+    .chat-input input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .chat-input button {
+      margin-left: 10px;
+      padding: 10px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <h1>Local Chess Game</h1>
-  <div class="sidebar">
-    <h2>Players Online</h2>
-    <ul class="player-list" id="playerList"></ul>
+  <div class="header">
+    <h1>Шашки</h1>
+    <div class="room-list" id="roomList"></div>
   </div>
-  <div class="board" id="board"></div>
+  <div class="game-container">
+    <div class="board" id="board"></div>
+    <div class="chat">
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input">
+        <input type="text" id="chatInput" placeholder="Введите сообщение">
+        <button id="chatSend">Отправить</button>
+      </div>
+    </div>
+  </div>
 
   <script>
-    // Список игроков, хранящийся в localStorage
-    const localPlayersKey = "localPlayers";
+    // Комнаты
+    const roomList = document.getElementById("roomList");
+    const rooms = Array(10).fill({ players: 0 });
 
-    // Получаем имя игрока
-    const playerName = prompt("Enter your name:");
-    const playerList = JSON.parse(localStorage.getItem(localPlayersKey)) || [];
-    
-    // Добавляем игрока в список
-    if (!playerList.includes(playerName)) {
-      playerList.push(playerName);
-      localStorage.setItem(localPlayersKey, JSON.stringify(playerList));
+    rooms.forEach((room, index) => {
+      const roomElement = document.createElement("div");
+      roomElement.classList.add("room");
+      roomElement.innerText = `${index + 1}: ${room.players}/2`;
+      roomElement.dataset.index = index;
+      roomElement.onclick = () => joinRoom(index);
+      roomList.appendChild(roomElement);
+    });
+
+    function joinRoom(index) {
+      const room = rooms[index];
+      if (room.players < 2) {
+        room.players++;
+        updateRoomDisplay();
+        alert(`Вы присоединились к комнате ${index + 1}`);
+        if (room.players === 2) {
+          startGame(index);
+        }
+      } else {
+        alert("Комната заполнена!");
+      }
     }
 
-    // Обновляем список игроков
-    const playerListElement = document.getElementById("playerList");
-    function updatePlayerList() {
-      playerListElement.innerHTML = "";
-      const players = JSON.parse(localStorage.getItem(localPlayersKey)) || [];
-      players.forEach((player) => {
-        const li = document.createElement("li");
-        li.classList.add("player");
-        li.textContent = player;
-        playerListElement.appendChild(li);
+    function updateRoomDisplay() {
+      document.querySelectorAll(".room").forEach((roomElement, index) => {
+        const room = rooms[index];
+        roomElement.innerText = `${index + 1}: ${room.players}/2`;
+        roomElement.classList.toggle("full", room.players === 2);
       });
     }
 
-    // Удаляем игрока при закрытии страницы
-    window.addEventListener("beforeunload", () => {
-      const players = JSON.parse(localStorage.getItem(localPlayersKey)) || [];
-      const updatedPlayers = players.filter((player) => player !== playerName);
-      localStorage.setItem(localPlayersKey, JSON.stringify(updatedPlayers));
-    });
-
-    updatePlayerList();
-
-    // Создаем шахматную доску
+    // Игра
     const board = document.getElementById("board");
+    let boardState = Array(8)
+      .fill(null)
+      .map(() => Array(8).fill(null));
 
-    function createBoard() {
-      const boardState = JSON.parse(localStorage.getItem("chessBoard")) || defaultBoardState();
+    function startGame(roomIndex) {
+      alert(`Игра в комнате ${roomIndex + 1} началась!`);
+      renderBoard();
+    }
+
+    function renderBoard() {
       board.innerHTML = "";
-
       for (let row = 0; row < 8; row++) {
         for (let col = 0; col < 8; col++) {
           const cell = document.createElement("div");
           cell.classList.add("cell");
           cell.dataset.row = row;
           cell.dataset.col = col;
-
-          const piece = boardState[row][col];
-          if (piece) {
-            const pieceElement = document.createElement("div");
-            pieceElement.classList.add("piece", piece.color);
-            pieceElement.setAttribute("draggable", "true");
-            pieceElement.dataset.type = piece.type;
-            cell.appendChild(pieceElement);
-          }
-
           board.appendChild(cell);
         }
       }
     }
 
-    function defaultBoardState() {
-      const initialBoard = Array(8)
-        .fill(null)
-        .map(() => Array(8).fill(null));
+    // Чат
+    const chatMessages = document.getElementById("chatMessages");
+    const chatInput = document.getElementById("chatInput");
+    const chatSend = document.getElementById("chatSend");
 
-      // Place pawns and rooks for both players
-      initialBoard[1] = Array(8).fill({ type: "pawn", color: "black" });
-      initialBoard[6] = Array(8).fill({ type: "pawn", color: "white" });
-
-      initialBoard[0][0] = initialBoard[0][7] = { type: "rook", color: "black" };
-      initialBoard[7][0] = initialBoard[7][7] = { type: "rook", color: "white" };
-
-      // Save initial board state
-      localStorage.setItem("chessBoard", JSON.stringify(initialBoard));
-      return initialBoard;
-    }
-
-    // Обработчики drag-and-drop
-    let draggedPiece = null;
-    let sourceCell = null;
-
-    board.addEventListener("dragstart", (e) => {
-      if (e.target.classList.contains("piece")) {
-        draggedPiece = e.target;
-        sourceCell = e.target.parentElement;
-        setTimeout(() => {
-          e.target.style.visibility = "hidden";
-        }, 0);
+    chatSend.onclick = () => {
+      const message = chatInput.value;
+      if (message.trim()) {
+        addMessage(`Вы: ${message}`);
+        chatInput.value = "";
       }
-    });
+    };
 
-    board.addEventListener("dragover", (e) => {
-      e.preventDefault();
-    });
-
-    board.addEventListener("drop", (e) => {
-      const targetCell = e.target.closest(".cell");
-      if (targetCell && !targetCell.querySelector(".piece")) {
-        targetCell.appendChild(draggedPiece);
-        draggedPiece.style.visibility = "visible";
-
-        updateBoardState(sourceCell, targetCell);
-      }
-    });
-
-    function updateBoardState(fromCell, toCell) {
-      const boardState = JSON.parse(localStorage.getItem("chessBoard"));
-      const fromRow = fromCell.dataset.row;
-      const fromCol = fromCell.dataset.col;
-      const toRow = toCell.dataset.row;
-      const toCol = toCell.dataset.col;
-
-      boardState[toRow][toCol] = boardState[fromRow][fromCol];
-      boardState[fromRow][fromCol] = null;
-
-      localStorage.setItem("chessBoard", JSON.stringify(boardState));
+    function addMessage(message) {
+      const messageElement = document.createElement("div");
+      messageElement.innerText = message;
+      chatMessages.appendChild(messageElement);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
     }
-
-    createBoard();
   </script>
 </body>
 </html>
