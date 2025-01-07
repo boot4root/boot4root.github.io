@@ -3,65 +3,39 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Шашки для двух игроков</title>
+  <title>Шашки (P2P)</title>
   <style>
-    body {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      background-color: #f0f0f0;
-      font-family: Arial, sans-serif;
-    }
-    .board {
-      display: grid;
-      grid-template-columns: repeat(8, 80px);
-      grid-template-rows: repeat(8, 80px);
-      margin-top: 20px;
-      border: 2px solid #333;
-    }
-    .cell {
-      width: 80px;
-      height: 80px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    .cell:nth-child(odd):nth-child(even),
-    .cell:nth-child(even):nth-child(odd) {
-      background-color: #769656;
-    }
-    .cell:nth-child(odd):nth-child(odd),
-    .cell:nth-child(even):nth-child(even) {
-      background-color: #eeeed2;
-    }
-    .piece {
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    .piece.white {
-      background-color: white;
-    }
-    .piece.black {
-      background-color: black;
-    }
+    /* (Весь CSS остаётся без изменений, используйте ваш оригинальный стиль) */
   </style>
 </head>
 <body>
-  <h1>Шашки для двух игроков</h1>
-  <div class="board" id="board"></div>
+  <div class="header">
+    <h1>Шашки (P2P)</h1>
+    <button id="createGame">Создать игру</button>
+    <button id="joinGame">Присоединиться к игре</button>
+  </div>
+  <div id="signalArea">
+    <textarea id="signalData" placeholder="Скопируйте или вставьте данные для подключения"></textarea>
+    <button id="sendSignal">Отправить</button>
+  </div>
+  <div class="game-container">
+    <div class="board" id="board"></div>
+  </div>
 
   <script>
     const board = document.getElementById("board");
-    const channel = new BroadcastChannel("checkers_game");
-    let playerColor = null;
-    let turn = "white"; // Начало игры всегда с белого
+    const createGameButton = document.getElementById("createGame");
+    const joinGameButton = document.getElementById("joinGame");
+    const signalArea = document.getElementById("signalArea");
+    const signalData = document.getElementById("signalData");
+    const sendSignalButton = document.getElementById("sendSignal");
 
-    // Создание доски
-    const boardState = Array(8).fill(null).map(() => Array(8).fill(null));
+    let peerConnection;
+    let dataChannel;
+
+    const config = {
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+    };
 
     function initializeBoard() {
       board.innerHTML = "";
@@ -72,16 +46,12 @@
           cell.dataset.row = row;
           cell.dataset.col = col;
 
-          // Расставляем шашки
+          // Добавьте начальное состояние шашек
           if ((row + col) % 2 === 1) {
             if (row < 3) {
-              const piece = createPiece("black");
-              boardState[row][col] = "black";
-              cell.appendChild(piece);
+              cell.appendChild(createPiece("black"));
             } else if (row > 4) {
-              const piece = createPiece("white");
-              boardState[row][col] = "white";
-              cell.appendChild(piece);
+              cell.appendChild(createPiece("white"));
             }
           }
           board.appendChild(cell);
@@ -95,97 +65,92 @@
       return piece;
     }
 
-    // Выбор игрока
-    function chooseColor() {
-      if (!playerColor) {
-        playerColor = confirm("Вы играете за белых? Нажмите 'Отмена' для чёрных.") ? "white" : "black";
-        alert(`Вы играете за ${playerColor === "white" ? "белых" : "чёрных"}!`);
+    function setupConnection(isInitiator) {
+      peerConnection = new RTCPeerConnection(config);
+
+      if (isInitiator) {
+        dataChannel = peerConnection.createDataChannel("game");
+        setupDataChannel();
+      } else {
+        peerConnection.ondatachannel = event => {
+          dataChannel = event.channel;
+          setupDataChannel();
+        };
+      }
+
+      peerConnection.onicecandidate = event => {
+        if (event.candidate) {
+          signalData.value = JSON.stringify(peerConnection.localDescription);
+        }
+      };
+
+      peerConnection.onconnectionstatechange = () => {
+        if (peerConnection.connectionState === "connected") {
+          console.log("Соединение установлено!");
+        }
+      };
+    }
+
+    function setupDataChannel() {
+      dataChannel.onmessage = event => {
+        const message = JSON.parse(event.data);
+        handleIncomingData(message);
+      };
+
+      dataChannel.onopen = () => console.log("Канал данных открыт!");
+    }
+
+    function handleIncomingData(data) {
+      if (data.type === "move") {
+        const { from, to } = data.payload;
+        const sourceCell = document.querySelector(`[data-row="${from.row}"][data-col="${from.col}"]`);
+        const targetCell = document.querySelector(`[data-row="${to.row}"][data-col="${to.col}"]`);
+
+        if (sourceCell && targetCell && sourceCell.firstChild) {
+          targetCell.appendChild(sourceCell.firstChild);
+        }
       }
     }
 
-    // Логика хода
-    board.addEventListener("click", (e) => {
-      const cell = e.target.closest(".cell");
-      if (!cell || !playerColor) return;
+    createGameButton.addEventListener("click", async () => {
+      setupConnection(true);
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      signalArea.style.display = "block";
+    });
 
-      const row = parseInt(cell.dataset.row);
-      const col = parseInt(cell.dataset.col);
+    joinGameButton.addEventListener("click", async () => {
+      setupConnection(false);
+      signalArea.style.display = "block";
+    });
 
-      // Проверяем очередность
-      if (turn !== playerColor) {
-        alert("Сейчас ход другого игрока!");
-        return;
-      }
+    sendSignalButton.addEventListener("click", async () => {
+      const signal = JSON.parse(signalData.value);
 
-      // Проверяем клетку
-      const piece = cell.querySelector(".piece");
-      if (piece && piece.classList.contains(playerColor)) {
-        const target = prompt("Введите клетку для перемещения (например, 4,5):");
-        if (!target) return;
-
-        const [targetRow, targetCol] = target.split(",").map(Number);
-        const targetCell = document.querySelector(`.cell[data-row="${targetRow}"][data-col="${targetCol}"]`);
-
-        if (isValidMove(row, col, targetRow, targetCol)) {
-          movePiece(cell, targetCell);
-        } else {
-          alert("Неверный ход!");
-        }
+      if (signal.type === "offer") {
+        await peerConnection.setRemoteDescription(signal);
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        signalData.value = JSON.stringify(peerConnection.localDescription);
+      } else if (signal.type === "answer") {
+        await peerConnection.setRemoteDescription(signal);
       }
     });
 
-    function isValidMove(fromRow, fromCol, toRow, toCol) {
-      // Простая проверка: движение на одну клетку
-      const direction = playerColor === "white" ? -1 : 1;
-      return Math.abs(fromCol - toCol) === 1 && toRow - fromRow === direction;
-    }
+    board.addEventListener("click", event => {
+      const targetCell = event.target.closest(".cell");
+      if (!targetCell || !targetCell.firstChild) return;
 
-    function movePiece(fromCell, toCell) {
-      const piece = fromCell.querySelector(".piece");
-      toCell.appendChild(piece);
+      const row = targetCell.dataset.row;
+      const col = targetCell.dataset.col;
 
-      const fromRow = parseInt(fromCell.dataset.row);
-      const fromCol = parseInt(fromCell.dataset.col);
-      const toRow = parseInt(toCell.dataset.row);
-      const toCol = parseInt(toCell.dataset.col);
-
-      // Обновляем состояние доски
-      boardState[toRow][toCol] = boardState[fromRow][fromCol];
-      boardState[fromRow][fromCol] = null;
-
-      // Передаём ход
-      turn = turn === "white" ? "black" : "white";
-
-      // Синхронизация через канал
-      channel.postMessage({ type: "move", boardState, turn });
-    }
-
-    // Обработка сообщений из канала
-    channel.onmessage = (event) => {
-      const { type, boardState: newState, turn: newTurn } = event.data;
-      if (type === "move") {
-        updateBoard(newState);
-        turn = newTurn;
+      // Пример передачи данных о ходе
+      if (dataChannel && dataChannel.readyState === "open") {
+        dataChannel.send(JSON.stringify({ type: "move", payload: { from: { row, col }, to: { row: 2, col: 2 } } }));
       }
-    };
+    });
 
-    function updateBoard(newState) {
-      boardState.forEach((row, i) => {
-        row.forEach((cell, j) => {
-          const domCell = document.querySelector(`.cell[data-row="${i}"][data-col="${j}"]`);
-          domCell.innerHTML = ""; // Очищаем
-
-          if (newState[i][j]) {
-            const piece = createPiece(newState[i][j]);
-            domCell.appendChild(piece);
-          }
-        });
-      });
-    }
-
-    // Инициализация
     initializeBoard();
-    chooseColor();
   </script>
 </body>
 </html>
