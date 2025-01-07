@@ -5,7 +5,58 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Шашки (P2P)</title>
   <style>
-    /* (Весь CSS остаётся без изменений, используйте ваш оригинальный стиль) */
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      height: 100vh;
+      background-color: #f0f0f0;
+    }
+    .header {
+      margin-bottom: 20px;
+    }
+    .game-container {
+      display: grid;
+      grid-template-columns: repeat(8, 50px);
+      grid-template-rows: repeat(8, 50px);
+      gap: 0;
+      border: 2px solid #000;
+    }
+    .cell {
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cell:nth-child(odd) {
+      background-color: #8B4513;
+    }
+    .cell:nth-child(even) {
+      background-color: #f0d9b5;
+    }
+    .piece {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+    }
+    .piece.black {
+      background-color: black;
+    }
+    .piece.white {
+      background-color: white;
+    }
+    #signalArea {
+      margin-top: 10px;
+      display: none;
+    }
+    textarea {
+      width: 300px;
+      height: 100px;
+    }
   </style>
 </head>
 <body>
@@ -18,9 +69,7 @@
     <textarea id="signalData" placeholder="Скопируйте или вставьте данные для подключения"></textarea>
     <button id="sendSignal">Отправить</button>
   </div>
-  <div class="game-container">
-    <div class="board" id="board"></div>
-  </div>
+  <div class="game-container" id="board"></div>
 
   <script>
     const board = document.getElementById("board");
@@ -32,6 +81,7 @@
 
     let peerConnection;
     let dataChannel;
+    let currentTurn = "white"; // Белый всегда ходит первым
 
     const config = {
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
@@ -46,7 +96,6 @@
           cell.dataset.row = row;
           cell.dataset.col = col;
 
-          // Добавьте начальное состояние шашек
           if ((row + col) % 2 === 1) {
             if (row < 3) {
               cell.appendChild(createPiece("black"));
@@ -54,6 +103,7 @@
               cell.appendChild(createPiece("white"));
             }
           }
+
           board.appendChild(cell);
         }
       }
@@ -108,6 +158,7 @@
 
         if (sourceCell && targetCell && sourceCell.firstChild) {
           targetCell.appendChild(sourceCell.firstChild);
+          currentTurn = currentTurn === "white" ? "black" : "white";
         }
       }
     }
@@ -137,18 +188,47 @@
       }
     });
 
+    let selectedCell = null;
+
     board.addEventListener("click", event => {
       const targetCell = event.target.closest(".cell");
-      if (!targetCell || !targetCell.firstChild) return;
+      if (!targetCell) return;
 
-      const row = targetCell.dataset.row;
-      const col = targetCell.dataset.col;
+      const row = parseInt(targetCell.dataset.row);
+      const col = parseInt(targetCell.dataset.col);
 
-      // Пример передачи данных о ходе
-      if (dataChannel && dataChannel.readyState === "open") {
-        dataChannel.send(JSON.stringify({ type: "move", payload: { from: { row, col }, to: { row: 2, col: 2 } } }));
+      if (selectedCell && targetCell !== selectedCell) {
+        // Проверяем корректность хода
+        if (isValidMove(selectedCell, targetCell)) {
+          targetCell.appendChild(selectedCell.firstChild);
+          sendMove(selectedCell, targetCell);
+          currentTurn = currentTurn === "white" ? "black" : "white";
+        }
+        selectedCell = null;
+      } else if (targetCell.firstChild && targetCell.firstChild.classList.contains(currentTurn)) {
+        selectedCell = targetCell;
       }
     });
+
+    function isValidMove(fromCell, toCell) {
+      const fromRow = parseInt(fromCell.dataset.row);
+      const fromCol = parseInt(fromCell.dataset.col);
+      const toRow = parseInt(toCell.dataset.row);
+      const toCol = parseInt(toCell.dataset.col);
+
+      const rowDiff = Math.abs(fromRow - toRow);
+      const colDiff = Math.abs(fromCol - toCol);
+
+      return rowDiff === 1 && colDiff === 1 && !toCell.firstChild;
+    }
+
+    function sendMove(fromCell, toCell) {
+      if (dataChannel && dataChannel.readyState === "open") {
+        const from = { row: parseInt(fromCell.dataset.row), col: parseInt(fromCell.dataset.col) };
+        const to = { row: parseInt(toCell.dataset.row), col: parseInt(toCell.dataset.col) };
+        dataChannel.send(JSON.stringify({ type: "move", payload: { from, to } }));
+      }
+    }
 
     initializeBoard();
   </script>
