@@ -9,7 +9,7 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       margin: 0;
       padding: 0;
       background-color: #f0f0f0;
@@ -39,9 +39,6 @@
       cursor: pointer;
       min-width: 80px;
     }
-    .room.active {
-      background-color: #28a745;
-    }
     .room.full {
       background-color: #dc3545;
       cursor: not-allowed;
@@ -63,7 +60,6 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      font-size: 24px;
     }
     .cell:nth-child(odd):nth-child(even),
     .cell:nth-child(even):nth-child(odd) {
@@ -150,53 +146,51 @@
   </div>
 
   <script>
-    // Комнаты
+    // Global variables
     const roomList = document.getElementById("roomList");
-    const rooms = Array(10).fill({ players: 0 });
+    const board = document.getElementById("board");
+    const chatMessages = document.getElementById("chatMessages");
+    const chatInput = document.getElementById("chatInput");
+    const chatSend = document.getElementById("chatSend");
 
-    rooms.forEach((room, index) => {
-      const roomElement = document.createElement("div");
-      roomElement.classList.add("room");
-      roomElement.innerText = `${index + 1}: ${room.players}/2`;
-      roomElement.dataset.index = index;
-      roomElement.onclick = () => joinRoom(index);
-      roomList.appendChild(roomElement);
+    let currentRoom = null;
+    let playerColor = null;
+    let boardState = Array(8).fill(null).map(() => Array(8).fill(null));
+    let turn = "white"; // Keep track of whose turn it is
+
+    // Initialize rooms
+    const rooms = Array.from({ length: 10 }, (_, i) => ({ players: [], id: i }));
+    rooms.forEach(room => {
+      const roomDiv = document.createElement("div");
+      roomDiv.classList.add("room");
+      roomDiv.textContent = `Комната ${room.id + 1}`;
+      roomDiv.onclick = () => joinRoom(room.id);
+      roomList.appendChild(roomDiv);
     });
 
-    function joinRoom(index) {
-      const room = rooms[index];
-      if (room.players < 2) {
-        room.players++;
-        updateRoomDisplay();
-        alert(`Вы присоединились к комнате ${index + 1}`);
-        if (room.players === 2) {
-          startGame(index);
-        }
-      } else {
+    function joinRoom(roomId) {
+      const room = rooms[roomId];
+      if (room.players.length >= 2) {
         alert("Комната заполнена!");
+        return;
       }
+
+      currentRoom = room;
+      room.players.push(prompt("Введите свое имя:"));
+      playerColor = room.players.length === 1 ? "white" : "black";
+      updateRooms();
+      if (room.players.length === 2) startGame();
     }
 
-    function updateRoomDisplay() {
-      document.querySelectorAll(".room").forEach((roomElement, index) => {
+    function updateRooms() {
+      document.querySelectorAll(".room").forEach((roomDiv, index) => {
         const room = rooms[index];
-        roomElement.innerText = `${index + 1}: ${room.players}/2`;
-        roomElement.classList.toggle("full", room.players === 2);
+        roomDiv.textContent = `Комната ${room.id + 1} (${room.players.length}/2)`;
       });
     }
 
-    // Игра
-    const board = document.getElementById("board");
-    let boardState = Array(8)
-      .fill(null)
-      .map(() => Array(8).fill(null));
-
-    function startGame(roomIndex) {
-      alert(`Игра в комнате ${roomIndex + 1} началась!`);
-      renderBoard();
-    }
-
-    function renderBoard() {
+    // Initialize board
+    function initializeBoard() {
       board.innerHTML = "";
       for (let row = 0; row < 8; row++) {
         for (let col = 0; col < 8; col++) {
@@ -204,29 +198,81 @@
           cell.classList.add("cell");
           cell.dataset.row = row;
           cell.dataset.col = col;
+
+          if ((row + col) % 2 === 1) {
+            if (row < 3) {
+              const piece = createPiece("black");
+              boardState[row][col] = piece;
+              cell.appendChild(piece);
+            } else if (row > 4) {
+              const piece = createPiece("white");
+              boardState[row][col] = piece;
+              cell.appendChild(piece);
+            }
+          }
+
           board.appendChild(cell);
         }
       }
     }
 
-    // Чат
-    const chatMessages = document.getElementById("chatMessages");
-    const chatInput = document.getElementById("chatInput");
-    const chatSend = document.getElementById("chatSend");
+    function createPiece(color) {
+      const piece = document.createElement("div");
+      piece.classList.add("piece", color);
+      piece.draggable = true;
+      piece.addEventListener("dragstart", dragStart);
+      return piece;
+    }
 
-    chatSend.onclick = () => {
+    // Drag and Drop
+    let draggedPiece = null;
+    let sourceCell = null;
+
+    function dragStart(e) {
+      draggedPiece = e.target;
+      sourceCell = draggedPiece.parentElement;
+      setTimeout(() => (draggedPiece.style.visibility = "hidden"), 0);
+    }
+
+    board.addEventListener("dragover", e => e.preventDefault());
+
+    board.addEventListener("drop", e => {
+      const targetCell = e.target;
+      if (targetCell.classList.contains("cell") && isValidMove(sourceCell, targetCell)) {
+        targetCell.appendChild(draggedPiece);
+        draggedPiece.style.visibility = "visible";
+        updateTurn();
+      }
+    });
+
+    function isValidMove(source, target) {
+      // Implement logic for valid moves
+      return true; // Placeholder
+    }
+
+    function updateTurn() {
+      turn = turn === "white" ? "black" : "white";
+    }
+
+    // Chat
+    chatSend.addEventListener("click", () => {
       const message = chatInput.value;
       if (message.trim()) {
         addMessage(`Вы: ${message}`);
         chatInput.value = "";
       }
-    };
+    });
 
     function addMessage(message) {
-      const messageElement = document.createElement("div");
-      messageElement.innerText = message;
-      chatMessages.appendChild(messageElement);
+      const msgDiv = document.createElement("div");
+      msgDiv.textContent = message;
+      chatMessages.appendChild(msgDiv);
       chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function startGame() {
+      alert("Игра началась!");
+      initializeBoard();
     }
   </script>
 </body>
