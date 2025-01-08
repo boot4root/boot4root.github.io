@@ -1,304 +1,156 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Шашки (P2P)</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      margin: 0;
-      height: 100vh;
-      background-color: #f0f0f0;
-    }
-    .header {
-      margin-bottom: 20px;
-    }
-    .game-container {
-      display: grid;
-      grid-template-columns: repeat(8, 50px);
-      grid-template-rows: repeat(8, 50px);
-      gap: 0;
-      border: 2px solid #000;
-    }
-    .cell {
-      width: 50px;
-      height: 50px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .cell:nth-child(odd) {
-      background-color: #f0d9b5;
-    }
-    .cell:nth-child(even) {
-      background-color: #8B4513;
-    }
-    .piece {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-    }
-    .piece.black {
-      background-color: black;
-    }
-    .piece.white {
-      background-color: white;
-    }
-    .piece.king::before {
-      content: "\265B";
-      font-size: 24px;
-      color: gold;
-      position: absolute;
-    }
-    #signalArea {
-      margin-top: 10px;
-      display: none;
-    }
-    #joinPrompt {
-      display: none;
-    }
-    textarea {
-      width: 300px;
-      height: 100px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fuel Consumption Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            width: 400px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        form {
+            margin-bottom: 20px;
+        }
+
+        input {
+            width: 90%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .history {
+            text-align: left;
+            margin-top: 20px;
+        }
+
+        .history-item {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .history-item span {
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
-  <div class="header">
-    <h1>Шашки (P2P)</h1>
-    <button id="createGame">Создать игру</button>
-    <button id="joinGame">Присоединиться к игре</button>
-  </div>
-  <div id="signalArea">
-    <textarea id="signalData" placeholder="Скопируйте или вставьте данные для подключения"></textarea>
-    <button id="sendSignal">Отправить</button>
-  </div>
-  <div id="joinPrompt">
-    <p>Кто-то приглашает вас присоединиться к игре. Вы хотите присоединиться?</p>
-    <button id="acceptInvite">Принять</button>
-    <button id="declineInvite">Отклонить</button>
-  </div>
-  <div class="game-container" id="board"></div>
+    <div class="container">
+        <h1>Fuel Consumption Calculator</h1>
+        <form id="fuel-form">
+            <input type="text" id="liters" placeholder="Liters refueled (e.g., 11.5 or 11,5)" required>
+            <input type="number" id="kilometers" placeholder="Kilometers driven" required step="0.01">
+            <button type="submit">Calculate</button>
+        </form>
+        <div class="result">
+            <p id="output"></p>
+        </div>
+        <div class="history">
+            <h2>History</h2>
+            <div id="history-container"></div>
+        </div>
+    </div>
 
-  <script>
-    const board = document.getElementById("board");
-    const createGameButton = document.getElementById("createGame");
-    const joinGameButton = document.getElementById("joinGame");
-    const signalArea = document.getElementById("signalArea");
-    const signalData = document.getElementById("signalData");
-    const sendSignalButton = document.getElementById("sendSignal");
-    const joinPrompt = document.getElementById("joinPrompt");
-    const acceptInviteButton = document.getElementById("acceptInvite");
-    const declineInviteButton = document.getElementById("declineInvite");
+    <script>
+        const form = document.getElementById('fuel-form');
+        const output = document.getElementById('output');
+        const historyContainer = document.getElementById('history-container');
 
-    let peerConnection;
-    let dataChannel;
-    let currentTurn = "white"; // Белый всегда ходит первым
-    let iceCandidates = [];
+        // Load history from localStorage
+        function loadHistory() {
+            const history = JSON.parse(localStorage.getItem('fuelHistory')) || [];
+            historyContainer.innerHTML = '';
 
-    const config = {
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-    };
+            history.forEach(entry => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `
+                    <p><span>Date:</span> ${entry.date}</p>
+                    <p><span>Liters:</span> ${entry.liters} L</p>
+                    <p><span>Kilometers:</span> ${entry.kilometers} km</p>
+                    <p><span>Consumption:</span> ${entry.consumption} L/100 km</p>
+                `;
+                historyContainer.appendChild(div);
+            });
+        }
 
-    function initializeBoard() {
-      board.innerHTML = "";
-      for (let row = 0; row < 8; row++) {
-        for (let col = 0; col < 8; col++) {
-          const cell = document.createElement("div");
-          cell.classList.add("cell");
-          cell.dataset.row = row;
-          cell.dataset.col = col;
+        // Save result to localStorage
+        function saveToHistory(liters, kilometers, consumption) {
+            const history = JSON.parse(localStorage.getItem('fuelHistory')) || [];
+            history.push({
+                date: new Date().toLocaleString(),
+                liters,
+                kilometers,
+                consumption
+            });
+            localStorage.setItem('fuelHistory', JSON.stringify(history));
+        }
 
-          if ((row + col) % 2 === 1) {
-            if (row < 3) {
-              cell.appendChild(createPiece("black"));
-            } else if (row > 4) {
-              cell.appendChild(createPiece("white"));
+        // Handle form submission
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+
+            let liters = document.getElementById('liters').value.replace(',', '.');
+            const kilometers = parseFloat(document.getElementById('kilometers').value);
+
+            liters = parseFloat(liters);
+
+            if (liters > 0 && kilometers > 0) {
+                const consumption = ((liters / kilometers) * 100).toFixed(2);
+                output.textContent = `Your fuel consumption is ${consumption} L/100 km.`;
+
+                // Save result to history
+                saveToHistory(liters, kilometers, consumption);
+
+                // Update history display
+                loadHistory();
+
+                // Clear the form
+                form.reset();
+            } else {
+                output.textContent = 'Please enter positive values.';
             }
-          }
-
-          board.appendChild(cell);
-        }
-      }
-    }
-
-    function createPiece(color) {
-      const piece = document.createElement("div");
-      piece.classList.add("piece", color);
-      return piece;
-    }
-
-    function setupConnection(isInitiator) {
-      peerConnection = new RTCPeerConnection(config);
-
-      peerConnection.onicecandidate = event => {
-        if (event.candidate) {
-          iceCandidates.push(event.candidate);
-          signalData.value = JSON.stringify({
-            sdp: peerConnection.localDescription,
-            ice: iceCandidates
-          });
-        }
-      };
-
-      peerConnection.oniceconnectionstatechange = () => {
-        if (peerConnection.iceConnectionState === "connected") {
-          console.log("Соединение установлено!");
-        }
-      };
-
-      if (isInitiator) {
-        dataChannel = peerConnection.createDataChannel("game");
-        setupDataChannel();
-      } else {
-        peerConnection.ondatachannel = event => {
-          dataChannel = event.channel;
-          setupDataChannel();
-        };
-      }
-    }
-
-    function setupDataChannel() {
-      dataChannel.onmessage = event => {
-        const message = JSON.parse(event.data);
-        handleIncomingData(message);
-      };
-
-      dataChannel.onopen = () => console.log("Канал данных открыт!");
-    }
-
-    function handleIncomingData(data) {
-      if (data.type === "move") {
-        const { from, to } = data.payload;
-        const sourceCell = document.querySelector(`[data-row="${from.row}"][data-col="${from.col}"]`);
-        const targetCell = document.querySelector(`[data-row="${to.row}"][data-col="${to.col}"]`);
-
-        if (sourceCell && targetCell && sourceCell.firstChild) {
-          targetCell.appendChild(sourceCell.firstChild);
-          currentTurn = currentTurn === "white" ? "black" : "white";
-
-          // Проверка на дамку
-          if ((to.row === 0 && sourceCell.firstChild.classList.contains("white")) ||
-              (to.row === 7 && sourceCell.firstChild.classList.contains("black"))) {
-            sourceCell.firstChild.classList.add("king");
-          }
-        }
-      }
-    }
-
-    createGameButton.addEventListener("click", async () => {
-      setupConnection(true);
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
-      signalArea.style.display = "block";
-    });
-
-    joinGameButton.addEventListener("click", () => {
-      setupConnection(false);
-      signalArea.style.display = "block";
-    });
-
-    sendSignalButton.addEventListener("click", async () => {
-      const signal = JSON.parse(signalData.value);
-
-      if (signal.sdp.type === "offer") {
-        await peerConnection.setRemoteDescription(signal.sdp);
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        signalData.value = JSON.stringify({
-          sdp: peerConnection.localDescription,
-          ice: iceCandidates
         });
-      } else if (signal.sdp.type === "answer") {
-        await peerConnection.setRemoteDescription(signal.sdp);
-      }
 
-      if (signal.ice) {
-        signal.ice.forEach(async candidate => {
-          try {
-            await peerConnection.addIceCandidate(candidate);
-          } catch (e) {
-            console.error("Ошибка добавления ICE-кандидата", e);
-          }
-        });
-      }
-    });
-
-    acceptInviteButton.addEventListener("click", () => {
-      joinPrompt.style.display = "none";
-      signalArea.style.display = "block";
-    });
-
-    declineInviteButton.addEventListener("click", () => {
-      joinPrompt.style.display = "none";
-      console.log("Приглашение отклонено");
-    });
-
-    let selectedCell = null;
-
-    board.addEventListener("click", event => {
-      const targetCell = event.target.closest(".cell");
-      if (!targetCell) return;
-
-      const row = parseInt(targetCell.dataset.row);
-      const col = parseInt(targetCell.dataset.col);
-
-      if (selectedCell && targetCell !== selectedCell) {
-        // Проверяем корректность хода
-        if (isValidMove(selectedCell, targetCell)) {
-          targetCell.appendChild(selectedCell.firstChild);
-          sendMove(selectedCell, targetCell);
-          currentTurn = currentTurn === "white" ? "black" : "white";
-
-          // Проверка на дамку
-          if ((row === 0 && selectedCell.firstChild.classList.contains("white")) ||
-              (row === 7 && selectedCell.firstChild.classList.contains("black"))) {
-            selectedCell.firstChild.classList.add("king");
-          }
-        }
-        selectedCell = null;
-      } else if (targetCell.firstChild && targetCell.firstChild.classList.contains(currentTurn)) {
-        selectedCell = targetCell;
-      }
-    });
-
-    function isValidMove(fromCell, toCell) {
-      const fromRow = parseInt(fromCell.dataset.row);
-      const fromCol = parseInt(fromCell.dataset.col);
-      const toRow = parseInt(toCell.dataset.row);
-      const toCol = parseInt(toCell.dataset.col);
-
-      const rowDiff = Math.abs(fromRow - toRow);
-      const colDiff = Math.abs(fromCol - toCol);
-
-      return rowDiff === 1 && colDiff === 1 && !toCell.firstChild;
-    }
-
-    function sendMove(fromCell, toCell) {
-      const fromRow = parseInt(fromCell.dataset.row);
-      const fromCol = parseInt(fromCell.dataset.col);
-      const toRow = parseInt(toCell.dataset.row);
-      const toCol = parseInt(toCell.dataset.col);
-
-      const message = {
-        type: "move",
-        payload: {
-          from: { row: fromRow, col: fromCol },
-          to: { row: toRow, col: toCol }
-        }
-      };
-
-      if (dataChannel && dataChannel.readyState === "open") {
-        dataChannel.send(JSON.stringify(message));
-      }
-    }
-
-    initializeBoard();
-  </script>
+        // Initial load
+        loadHistory();
+    </script>
 </body>
 </html>
